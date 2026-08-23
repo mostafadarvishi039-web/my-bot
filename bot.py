@@ -13,19 +13,26 @@ INBOUND_ID = 1
 
 requests.packages.urllib3.disable_warnings()
 
+# هدرهای مرورگر برای جلوگیری از مسدود شدن توسط فایروال یا کلادفلر
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*"
+}
+
 def create_client_in_panel(client_email, total_gb=1, expire_days=1):
     session = requests.Session()
+    session.headers.update(HEADERS)
+    
     login_url = f"{PANEL_URL}/login"
     payload = {"username": USERNAME, "password": PASSWORD}
     
     try:
-        # تنظیم تایم‌اوت ۵ ثانیه برای اینکه روی هوا گیر نکند
-        login_res = session.post(login_url, data=payload, verify=False, timeout=5)
+        login_res = session.post(login_url, data=payload, verify=False, timeout=10)
         
         try:
             res_json = login_res.json()
         except:
-            return f"Error: Panel blocked or returned HTML (Status: {login_res.status_code})"
+            return f"Error: Blocked (Status: {login_res.status_code})"
             
         if not res_json.get("success"):
             return "Login Failed: Wrong Username or Password"
@@ -55,7 +62,7 @@ def create_client_in_panel(client_email, total_gb=1, expire_days=1):
             }}"""
         }
         
-        add_res = session.post(add_url, data=data, verify=False, timeout=5)
+        add_res = session.post(add_url, data=data, verify=False, timeout=10)
         add_json = add_res.json()
         
         if add_json.get("success"):
@@ -63,8 +70,6 @@ def create_client_in_panel(client_email, total_gb=1, expire_days=1):
         else:
             return f"API Error: {add_json.get('msg', 'Unknown')}"
             
-    except requests.exceptions.Timeout:
-        return "Error: Connection timed out. Panel took too long to respond."
     except Exception as e:
         return f"Exception: {str(e)}"
 
@@ -96,7 +101,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(
                 f"✅ **اکانت تست با موفقیت ساخته شد!**\n\n"
                 f"👤 ایمیل: `{client_email}`\n"
-                f"🔑 UUID: `{result}`",
+                f"🔑 UUID: `{result}`\n\n"
+                f"الان برو تو پنلت چک کن ببین کاربر اومده یا نه! 🚀",
                 parse_mode="Markdown"
             )
         else:
