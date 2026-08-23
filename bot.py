@@ -6,7 +6,7 @@ import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-PANEL_URL = "https://panel.vip.veraxideas.ir:2053/PanelMrMatinVpn"
+PANEL_URL = "https://panel.vip.veraxideas.ir:2053"
 USERNAME = "Mr.Matin.Panel"
 PASSWORD = "@2041390Mm"
 INBOUND_ID = 1
@@ -19,15 +19,16 @@ def create_client_in_panel(client_email, total_gb=1, expire_days=1):
     payload = {"username": USERNAME, "password": PASSWORD}
     
     try:
-        # مرحله ۱: لاگین به پنل
         login_res = session.post(login_url, data=payload, verify=False, timeout=10)
-        print("Login Response Code:", login_res.status_code)
-        print("Login Response Text:", login_res.text)
         
-        if not login_res.json().get("success"):
-            return "Login Failed: Check Username/Password or URL"
+        try:
+            res_json = login_res.json()
+        except:
+            return f"Login Error: Panel returned HTML instead of JSON."
             
-        # تبدیل حجم و تاریخ
+        if not res_json.get("success"):
+            return "Login Failed: Wrong Username or Password"
+            
         total_bytes = int(total_gb * 1024 * 1024 * 1024)
         expiry_time = int(time.time() * 1000) + (expire_days * 24 * 60 * 60 * 1000)
         client_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + '-' + \
@@ -53,19 +54,15 @@ def create_client_in_panel(client_email, total_gb=1, expire_days=1):
             }}"""
         }
         
-        # مرحله ۲: ارسال درخواست ساخت کلاینت
         add_res = session.post(add_url, data=data, verify=False, timeout=10)
-        print("Add Client Response Code:", add_res.status_code)
-        print("Add Client Response Text:", add_res.text)
+        add_json = add_res.json()
         
-        res_json = add_res.json()
-        if res_json.get("success"):
+        if add_json.get("success"):
             return client_id
         else:
-            return f"Panel Error: {res_json.get('msg', 'Unknown error')}"
+            return f"Panel API Error: {add_json.get('msg', 'Unknown')}"
             
     except Exception as e:
-        print("Exception:", str(e))
         return f"Exception: {str(e)}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -97,7 +94,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ **اکانت تست با موفقیت ساخته شد!**\n\n"
                 f"👤 ایمیل: `{client_email}`\n"
                 f"🔑 UUID: `{result}`",
-                parse_mode="Markdown"
+                parse_Mode="Markdown"
             )
         else:
             await query.edit_message_text(f"❌ خطا:\n`{result}`", parse_mode="Markdown")
