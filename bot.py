@@ -9,6 +9,8 @@ from telegram.ext import (
     ContextTypes
 )
 
+print("BOT IS STARTING UP...")
+
 # 📌 لینک‌های تست رایگان
 SUBSCRIPTION_POOL = [
     "https://194.5.175.226:2096/sub/93ovrn26eymmn72o",
@@ -18,10 +20,8 @@ SUBSCRIPTION_POOL = [
 # ⚠️ شناسه تلگرام خودت برای دریافت رسیدها
 ADMIN_CHAT_ID = 7357227534
 
-# دیکشنری موقت برای بررسی ارسال رسید
 WAITING_FOR_RECEIPT = set()
 
-# منوی اصلی (با کیبورد پایین صفحه که هیچ‌وقت چرخش و ارور نمی‌خوره)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("🎁 دریافت تست رایگان"), KeyboardButton("🛒 خرید اشتراک")],
@@ -36,13 +36,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# مدیریت پیام‌ها و دکمه‌ها
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user = update.message.from_user
     user_id = user.id
     
-    # اگر کاربر در حال ارسال رسید است و عکس فرستاده
     if user_id in WAITING_FOR_RECEIPT and update.message.photo:
         photo_file = update.message.photo[-1].file_id
         
@@ -71,7 +69,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         WAITING_FOR_RECEIPT.remove(user_id)
         return
 
-    # دکمه‌های منو
     if text == "🎁 دریافت تست رایگان":
         if len(SUBSCRIPTION_POOL) > 0:
             assigned_sub = random.choice(SUBSCRIPTION_POOL)
@@ -79,7 +76,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ **اشتراک تست شما با موفقیت آماده شد!**\n\n"
                 f"🔗 **لینک سابسکریپشن شما:**\n`{assigned_sub}`\n\n"
                 f"📥 این لینک را کپی کرده و در برنامه (مثل V2rayNG) وارد کنید. 🚀",
-                parse_mode="Markdown"
+                parse_Mode="Markdown"
             )
         else:
             await update.message.reply_text("❌ فعلاً لینک تستی در انبار موجود نیست!")
@@ -100,6 +97,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     TOKEN = os.environ.get("BOT_TOKEN")
     if not TOKEN:
+        print("ERROR: BOT_TOKEN is missing!")
         exit(1)
         
     app = ApplicationBuilder().token(TOKEN).build()
@@ -107,4 +105,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
     
+    print("BOT IS RUNNING AND POLLING...")
     app.run_polling()
