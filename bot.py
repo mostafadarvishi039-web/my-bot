@@ -6,73 +6,68 @@ import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# اطلاعات پنل شما
 PANEL_URL = "https://panel.vip.veraxideas.ir:2053/PanelMrMatinVpn"
 USERNAME = "Mr.Matin.Panel"
 PASSWORD = "@2041390Mm"
-INBOUND_ID = 1  # شناسه اینباند (معمولاً 1 است)
+INBOUND_ID = 1
 
-# غیرفعال کردنشدن خطاهای مربوط به SSL (برای گواهی‌های خودامضا)
 requests.packages.urllib3.disable_warnings()
 
-# تابع برای لاگین و گرفتن کوکی از پنل
-def get_panel_session():
+def create_client_in_panel(client_email, total_gb=1, expire_days=1):
     session = requests.Session()
     login_url = f"{PANEL_URL}/login"
     payload = {"username": USERNAME, "password": PASSWORD}
-    try:
-        response = session.post(login_url, data=payload, verify=False, timeout=10)
-        if response.json().get("success"):
-            return session
-    except Exception as e:
-        print("Login Error:", e)
-    return None
-
-# تابع ساخت کاربر جدید در پنل 3X-UI
-def create_client_in_panel(client_email, total_gb=1, expire_days=1):
-    session = get_panel_session()
-    if not session:
-        return None
-    
-    # تبدیل حجم به بایت
-    total_bytes = int(total_gb * 1024 * 1024 * 1024)
-    # محاسبه تاریخ انقضا (به میلی‌ثانیه)
-    expiry_time = int(time.time() * 1000) + (expire_days * 24 * 60 * 60 * 1000)
-    
-    # ساخت UUID رندم برای کلاینت
-    client_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + '-' + \
-                ''.join(random.choices(string.ascii_lowercase + string.digits, k=4)) + '-' + \
-                '4' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=3)) + '-' + \
-                '8' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=3)) + '-' + \
-                ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
-    
-    add_url = f"{PANEL_URL}/panel/api/inbounds/addClient"
-    data = {
-        "id": INBOUND_ID,
-        "settings": f"""{{
-            "clients": [{{
-                "id": "{client_id}",
-                "alterId": 0,
-                "email": "{client_email}",
-                "limitIp": 2,
-                "totalGB": {total_bytes},
-                "expiryTime": {expiry_time},
-                "enable": true,
-                "flow": "xtls-rprx-vision"
-            }}]
-        }}"""
-    }
     
     try:
-        response = session.post(add_url, data=data, verify=False, timeout=10)
-        res_json = response.json()
+        # مرحله ۱: لاگین به پنل
+        login_res = session.post(login_url, data=payload, verify=False, timeout=10)
+        print("Login Response Code:", login_res.status_code)
+        print("Login Response Text:", login_res.text)
+        
+        if not login_res.json().get("success"):
+            return "Login Failed: Check Username/Password or URL"
+            
+        # تبدیل حجم و تاریخ
+        total_bytes = int(total_gb * 1024 * 1024 * 1024)
+        expiry_time = int(time.time() * 1000) + (expire_days * 24 * 60 * 60 * 1000)
+        client_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8)) + '-' + \
+                    ''.join(random.choices(string.ascii_lowercase + string.digits, k=4)) + '-' + \
+                    '4' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=3)) + '-' + \
+                    '8' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=3)) + '-' + \
+                    ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
+        
+        add_url = f"{PANEL_URL}/panel/api/inbounds/addClient"
+        data = {
+            "id": INBOUND_ID,
+            "settings": f"""{{
+                "clients": [{{
+                    "id": "{client_id}",
+                    "alterId": 0,
+                    "email": "{client_email}",
+                    "limitIp": 2,
+                    "totalGB": {total_bytes},
+                    "expiryTime": {expiry_time},
+                    "enable": true,
+                    "flow": "xtls-rprx-vision"
+                }}]
+            }}"""
+        }
+        
+        # مرحله ۲: ارسال درخواست ساخت کلاینت
+        add_res = session.post(add_url, data=data, verify=False, timeout=10)
+        print("Add Client Response Code:", add_res.status_code)
+        print("Add Client Response Text:", add_res.text)
+        
+        res_json = add_res.json()
         if res_json.get("success"):
             return client_id
+        else:
+            return f"Panel Error: {res_json.get('msg', 'Unknown error')}"
+            
     except Exception as e:
-        print("Add Client Error:", e)
-    return None
+        print("Exception:", str(e))
+        return f"Exception: {str(e)}"
 
-# منوی اصلی ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🎁 دریافت تست رایگان", callback_data="get_test")],
@@ -80,38 +75,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("⚙️ اکانت‌های من", callback_data="my_account")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
-        "سلام به ربات رسمی **Verax VPN** خوش آمدید! ⚡️\n\n"
-        "از دکمه‌های زیر می‌توانید برای دریافت تست رایگان یا خرید اشتراک استفاده کنید:",
+        "سلام به ربات رسمی **Verax VPN** خوش آمدید! ⚡️",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
 
-# مدیریت دکمه‌های شیشه‌ای
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     if query.data == "get_test":
-        await query.edit_message_text("⏳ در حال ساخت کانفیگ تست رایگان روی سرور...")
-        
+        await query.edit_message_text("⏳ در حال ارتباط با پنل و ساخت تست...")
         user_telegram_id = query.from_user.id
         client_email = f"test_{user_telegram_id}"
         
-        # ایجاد اکانت تست (۱ گیگابایت، ۱ روزه)
-        client_uuid = create_client_in_panel(client_email, total_gb=1, expire_days=1)
+        result = create_client_in_panel(client_email)
         
-        if client_uuid:
+        if len(result) > 30:  # یعنی UUID برگشته و موفق بوده
             await query.edit_message_text(
-                f"✅ **اشتراک تست شما با موفقیت ساخته شد!**\n\n"
-                f"👤 نام کاربری: `{client_email}`\n"
-                f"🔑 شناسه (UUID): `{client_uuid}`\n\n"
-                f"حالا برو تو پنلت چک کن ببین کاربر `{client_email}` اضافه شده یا نه! 🚀",
+                f"✅ **اکانت تست با موفقیت ساخته شد!**\n\n"
+                f"👤 ایمیل: `{client_email}`\n"
+                f"🔑 UUID: `{result}`",
                 parse_mode="Markdown"
             )
         else:
-            await query.edit_message_text("❌ خطا در ارتباط با پنل یا ساخت اکانت. لطفاً دوباره تلاش کنید.")
+            await query.edit_message_text(f"❌ خطا:\n`{result}`", parse_mode="Markdown")
             
     elif query.data == "buy_sub":
         await query.edit_message_text("🛒 بخش خرید اشتراک به زودی فعال خواهد شد...")
