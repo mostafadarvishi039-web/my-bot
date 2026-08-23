@@ -19,12 +19,13 @@ def create_client_in_panel(client_email, total_gb=1, expire_days=1):
     payload = {"username": USERNAME, "password": PASSWORD}
     
     try:
-        login_res = session.post(login_url, data=payload, verify=False, timeout=10)
+        # تنظیم تایم‌اوت ۵ ثانیه برای اینکه روی هوا گیر نکند
+        login_res = session.post(login_url, data=payload, verify=False, timeout=5)
         
         try:
             res_json = login_res.json()
         except:
-            return f"Login Error: Panel returned HTML instead of JSON."
+            return f"Error: Panel blocked or returned HTML (Status: {login_res.status_code})"
             
         if not res_json.get("success"):
             return "Login Failed: Wrong Username or Password"
@@ -54,14 +55,16 @@ def create_client_in_panel(client_email, total_gb=1, expire_days=1):
             }}"""
         }
         
-        add_res = session.post(add_url, data=data, verify=False, timeout=10)
+        add_res = session.post(add_url, data=data, verify=False, timeout=5)
         add_json = add_res.json()
         
         if add_json.get("success"):
             return client_id
         else:
-            return f"Panel API Error: {add_json.get('msg', 'Unknown')}"
+            return f"API Error: {add_json.get('msg', 'Unknown')}"
             
+    except requests.exceptions.Timeout:
+        return "Error: Connection timed out. Panel took too long to respond."
     except Exception as e:
         return f"Exception: {str(e)}"
 
@@ -89,12 +92,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         result = create_client_in_panel(client_email)
         
-        if len(result) > 30:  # یعنی UUID برگشته و موفق بوده
+        if len(result) > 30:  # یعنی UUID ساخته شده
             await query.edit_message_text(
                 f"✅ **اکانت تست با موفقیت ساخته شد!**\n\n"
                 f"👤 ایمیل: `{client_email}`\n"
                 f"🔑 UUID: `{result}`",
-                parse_Mode="Markdown"
+                parse_mode="Markdown"
             )
         else:
             await query.edit_message_text(f"❌ خطا:\n`{result}`", parse_mode="Markdown")
