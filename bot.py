@@ -10,18 +10,22 @@ from telegram.ext import (
     ContextTypes
 )
 
-# توکن ربات رو از متغیر محیطی می‌خونه (یا می‌تونی مستقیم جاش بذاری)
+# توکن ربات رو اینجا بذار یا از متغیر محیطی بخون
 TOKEN = os.environ.get("BOT_TOKEN", "توکن_ربات_اینجا")
-
-SUBSCRIPTION_POOL = [
-    "https://194.5.175.226:2096/sub/93ovrn26eymmn72o",
-    "https://panel.vip.veraxideas.ir:2096/sub/3rn4vx5s8ekhhlu3"
-]
 
 ADMIN_CHAT_ID = 7357227534
 WAITING_FOR_RECEIPT = set()
 
-# منوی اصلی پایین صفحه (دقیقاً مشابه نمونه‌ای که فرستادی)
+# پایگاه داده ساده فرضی برای موجودی کیف پول کاربران (به تومان)
+# کلید: user_id، مقدار: موجودی
+USER_WALLETS = {}
+
+# اطلاعات کارت
+CARD_NUMBER = "6219861956948888"
+CARD_HOLDER = "محمد متین اجلالی"
+PRICE_TOMAN = 248000
+PRICE_RIAL = PRICE_TOMAN * 10  # تبدیل به ریال برای دکمه کپی
+
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton("🟢 خرید اشتراک 🔑"), KeyboardButton("♻️ تمدید سرویس")],
@@ -45,6 +49,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     user_id = user.id
     
+    # اطمینان از اینکه کاربر در دیکشنری کیف پول وجود دارد
+    if user_id not in USER_WALLETS:
+        USER_WALLETS[user_id] = 0  # پیش‌فرض موجودی صفر
+        
     # بررسی ارسال رسید توسط کاربر
     if user_id in WAITING_FOR_RECEIPT and update.message.photo:
         photo_file = update.message.photo[-1].file_id
@@ -53,12 +61,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔔 **رسید جدید پرداخت برای بررسی!**\n\n"
             f"👤 نام: {user.full_name}\n"
             f"آیدی: `@{user.username}`\n"
-            f"🆔 یوزر‌دی: `{user_id}`"
+            f"🆔 یوزر‌دی: `{user_id}`\n"
+            f"💵 مبلغ فاکتور: {PRICE_TOMAN:,} تومان"
         )
         
-        # دکمه‌های مدیریت زیر رسید برای خودت (ادمین)
         admin_keyboard = [
-            [InlineKeyboardButton("✅ تایید پرداخت", callback_data=f"approve_{user_id}"),
+            [InlineKeyboardButton("✅ تایید پرداخت و شارژ کیف پول", callback_data=f"approve_{user_id}"),
              InlineKeyboardButton("❌ رد پرداخت", callback_data=f"reject_{user_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(admin_keyboard)
@@ -73,7 +81,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(
                 "✅ **رسید شما با موفقیت ارسال شد!**\n\n"
-                "به زودی پس از تایید ادمین، اشتراک شما فعال خواهد شد. 🙏",
+                "به زودی پس از تایید ادمین، کیف پول شما شارژ و سفارش شما انجام خواهد شد. 🙏",
                 reply_markup=get_main_keyboard()
             )
         except Exception as e:
@@ -83,101 +91,155 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         WAITING_FOR_RECEIPT.remove(user_id)
         return
 
-    # مدیریت دکمه‌های کیبورد اصلی
-    if text == "🔑 اکانت تست":
-        if len(SUBSCRIPTION_POOL) > 0:
-            assigned_sub = random.choice(SUBSCRIPTION_POOL)
-            await update.message.reply_text(
-                f"✅ **اشتراک تست شما با موفقیت آماده شد!**\n\n"
-                f"🔗 **لینک سابسکریپشن شما:**\n`{assigned_sub}`\n\n"
-                f"📥 این لینک را کپی کرده و در برنامه (مثل V2rayNG) وارد کنید. 🚀",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text("❌ فعلاً لینک تستی در انبار موجود نیست!")
-            
-    elif text == "🟢 خرید اشتراک 🔑":
-        # شبیه‌سازی پیش‌فاکتور و روش پرداخت مشابه عکس‌های فرستاده شده
+    if text == "🟢 خرید اشتراک 🔑":
+        # دکمه شیشه‌ای اشتراک یک ماهه نامحدود ۲۴۸ هزار تومانی
         keyboard = [
-            [InlineKeyboardButton("💳 کارت به کارت", callback_data="pay_card")],
-            [InlineKeyboardButton("✨ Star Telegram", callback_data="pay_star")],
-            [InlineKeyboardButton("❌ بستن لیست", callback_data="close_list")]
+            [InlineKeyboardButton("اشتراک یک ماهه نامحدود ۲۴۸ هزار تومن 🏷️", callback_data="buy_unlimited_30d")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        invoice_text = (
-            "🖨️ **پیش فاکتور شما:**\n"
-            f"👤 نام کاربری: `{user.username or user.first_name}`\n"
-            "🔒 نام سرویس: ⚙️ سرویس دلخواه\n"
-            "📅 مدت اعتبار: ۳۰ روز\n"
-            "💶 قیمت: ۱۵۰,۰۰۰ تومان\n"
-            "👥 حجم اکانت: ۳۰ گیگ\n"
-            "💰 موجودی کیف پول شما: 0\n\n"
-            "💰 **موجودی حساب شما کافی نمی باشد یک روش پرداخت از لیست پایین انتخاب نمایید** 📝"
+        await update.message.reply_text(
+            "🛒 لطفاً نوع اشتراک خود را از زیر انتخاب کنید:",
+            reply_markup=reply_markup
         )
-        await update.message.reply_text(invoice_text, reply_markup=reply_markup, parse_mode="Markdown")
         
+    elif text == "🔑 اکانت تست":
+        await update.message.reply_text("🔑 بخش اکانت تست موقتاً در این نسخه غیرفعال است.")
     elif text == "🛍️ سرویس‌های من":
-        await update.message.reply_text("👤 شما در حال حاضر یک اشتراک فعال ۳۰ روزه دارید.")
-        
+        await update.message.reply_text("👤 شما در حال حاضر اشتراک فعالی ندارید.")
     elif text == "🏦 کیف پول + شارژ":
-        await update.message.reply_text("💰 موجودی کیف پول شما: **0 تومان**\n\nبرای افزایش موجودی با ادمین در ارتباط باشید.")
-        
+        wallet_balance = USER_WALLETS.get(user_id, 0)
+        await update.message.reply_text(f"💰 موجودی کیف پول شما: **{wallet_balance:,} تومان**", parse_mode="Markdown")
     elif text == "☎️ پشتیبانی":
-        await update.message.reply_text("💬 برای ارتباط با پشتیبانی و رفع مشکلات به آیدی زیر پیام دهید:\n@matinejlali_official")
-        
+        await update.message.reply_text("💬 برای ارتباط با پشتیبانی به آیدی زیر پیام دهید:\n@matinejlali_official")
     elif text == "👥 زیر مجموعه گیری":
-        await update.message.reply_text("🔗 لینک زیرمجموعه‌گیری شما:\n`https://t.me/YourBot?start=ref_{}`\n\nبا دعوت دوستان خود هدیه بگیرید!".format(user_id), parse_mode="Markdown")
-        
+        await update.message.reply_text("🔗 لینک زیرمجموعه‌گیری شما فعال است.")
     elif text == "👨‍💻 پنل مدیریت":
         if user_id == ADMIN_CHAT_ID:
-            await update.message.reply_text("👑 خوش آمدید ادمین عزیز. پنل مدیریت فعال است.")
+            await update.message.reply_text("👑 خوش آمدید ادمین عزیز.")
         else:
-            await update.message.reply_text("❌ شما دسترسی به پنل مدیریت ندارید!")
-            
+            await update.message.reply_text("❌ دسترسی ندارید.")
     elif text == "💻 درخواست نمایندگی":
-        await update.message.reply_text("💼 برای دریافت پنل نمایندگی و شرایط همکاری، به ادمین پیام دهید.")
-        
+        await update.message.reply_text("💼 برای دریافت پنل نمایندگی به ادمین پیام دهید.")
     else:
         await update.message.reply_text("لطفاً از دکمه‌های منو استفاده کنید.", reply_markup=get_main_keyboard())
 
-# مدیریت کلیک دکمه‌های شیشه‌ای (پرداخت، کارت به کارت و تایید ادمین)
+# مدیریت دکمه‌های شیشه‌ای
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
     data = query.data
+    username = query.from_user.username or query.from_user.first_name
     
-    if data == "pay_card":
-        WAITING_FOR_RECEIPT.add(user_id)
-        card_info = (
-            "برای افزایش موجودی، مبلغ **150,000 تومان** را به شماره‌ی حساب زیر واریز کنید 👇\n\n"
-            "=====================\n"
-            "<code>5047061673289241</code>\n"
-            "مهدی حسینی صفا\n"
-            "=====================\n\n"
-            "❌ این تراکنش به مدت یک ساعت اعتبار دارد پس از آن امکان پرداخت این تراکنش امکان ندارد.\n"
-            "‼️ مبلغ باید همان مبلغی که در بالا ذکر شده واریز نمایید.\n"
-            "⬆️ بعد از پرداخت، دکمه پرداخت کردم را زده سپس تصویر رسید را ارسال نمایید."
+    if user_id not in USER_WALLETS:
+        USER_WALLETS[user_id] = 0
+
+    if data == "buy_unlimited_30d":
+        wallet_balance = USER_WALLETS[user_id]
+        
+        # ساخت متن پیش‌فاکتور دقیقاً مطابق درخواست شما
+        invoice_text = (
+            "📇 **پیش فاکتور شما:**\n"
+            f"👤 نام کاربری: `{username}`\n"
+            "🔐 نام سرویس: سرویس نامحدود\n"
+            "📆 مدت اعتبار: 30 روز\n"
+            "💶 قیمت:  248,000 تومان\n"
+            "👥 حجم اکانت: ♾️\n"
+            "🗒 یادداشت محصول : \n"
+            f"💵 موجودی کیف پول شما : {wallet_balance:,}\n\n"
+            "💰 سفارش شما آماده پرداخت است"
         )
-        await query.edit_message_text(card_info, parse_mode="HTML")
         
-    elif data == "pay_star":
-        await query.edit_message_text("⭐️ پرداخت با استارز تلگرام به زودی فعال خواهد شد.")
+        # بررسی اینکه آیا موجودی کیف پول برای خرید کامل است یا خیر
+        if wallet_balance >= PRICE_TOMAN:
+            # موجودی کافی است -> دکمه برداشت از کیف پول
+            keyboard = [
+                [InlineKeyboardButton("💵 برداشت از کیف پول", callback_data="pay_from_wallet")],
+                [InlineKeyboardButton("❌ انصراف", callback_data="cancel_order")]
+            ]
+        else:
+            # موجودی کافی نیست -> پیام کسری موجودی و دکمه کارت به کارت
+            invoice_text += "\n\n📝 موجودی حساب شما کافی نمی باشد یک روش پرداخت از لیست پایین انتخاب نمایید"
+            keyboard = [
+                [InlineKeyboardButton("💳 کارت به کارت", callback_data="pay_card")],
+                [InlineKeyboardButton("❌ بستن لیست", callback_data="cancel_order")]
+            ]
+            
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(invoice_text, reply_markup=reply_markup, parse_mode="Markdown")
         
-    elif data == "close_list":
-        await query.edit_message_text("❌ منوی پرداخت بسته شد.")
+    elif data == "pay_from_wallet":
+        wallet_balance = USER_WALLETS[user_id]
+        if wallet_balance >= PRICE_TOMAN:
+            USER_WALLETS[user_id] -= PRICE_TOMAN
+            await query.edit_message_text(
+                "✅ **پرداخت با موفقیت از کیف پول انجام شد!**\n\n"
+                "سرویس نامحدود ۳۰ روزه شما فعال گردید. 🚀",
+                parse_mode="Markdown"
+            )
+        else:
+            await query.edit_message_text("❌ موجودی کیف پول شما کافی نیست!")
+            
+    elif data == "pay_card":
+        # متن کارت به کارت دقیقاً با جزئیات درخواستی شما
+        card_info = (
+            "برای افزایش موجودی، مبلغ 248,000 تومان را به شماره‌ی حساب زیر واریز کنید 👇🏻\n\n"
+            "====================\n"
+            f"<code>{CARD_NUMBER}</code>\n"
+            f"{CARD_HOLDER}\n"
+            "====================\n\n"
+            "❌ این تراکنش به مدت یک ساعت اعتبار دارد پس از آن امکان پرداخت این تراکنش امکان ندارد.\n"
+            "‼مبلغ باید همان مبلغی که در بالا ذکر شده واریز نمایید.\n"
+            "‼️امکان برداشت وجه از کیف پول نیست.\n"
+            "‼️مسئولیت واریز اشتباهی با شماست.\n"
+            "🔝بعد از پرداخت دکمه پرداخت کردم را زده سپس تصویر رسید را ارسال نمایید"
+        )
+        # سه دکمه شیشه‌ای پایین کارت به کارت
+        card_keyboard = [
+            [InlineKeyboardButton("📋 کپی کردن شماره کارت", callback_data="copy_card"),
+             InlineKeyboardButton("💵 کپی کردن مبلغ", callback_data="copy_price")],
+            [InlineKeyboardButton("✅ پرداخت کردم | ارسال رسید", callback_data="send_receipt_prompt")]
+        ]
+        await query.edit_message_text(card_info, reply_markup=InlineKeyboardMarkup(card_keyboard), parse_mode="HTML")
+        
+    elif data == "copy_card":
+        await query.answer(text=f"شماره کارت کپی شد: {CARD_NUMBER}", show_alert=True)
+        
+    elif data == "copy_price":
+        # ارسال مبلغ به ریال به صورت هشدار یا متن
+        await query.answer(text=f"مبلغ به ریال: {PRICE_RIAL:,} ریال", show_alert=True)
+        
+    elif data == "send_receipt_prompt":
+        WAITING_FOR_RECEIPT.add(user_id)
+        await query.edit_message_text(
+            "🖼 تصویر رسید خود را ارسال نمایید...\n\n"
+            "لطفاً اسکرین‌شات یا عکس فیش واریزی را همینجا در چت بفرستید تا برای ادمین ارسال شود."
+        )
+        
+    elif data == "cancel_order":
+        await query.edit_message_text("❌ عملیات لغو شد.")
         
     elif data.startswith("approve_"):
-        target_user = data.split("_")[1]
-        await query.edit_message_caption(caption=query.message.caption + "\n\n✅ **وضعیت: پرداخت تایید شد!**")
-        await context.bot.send_message(chat_id=int(target_user), text="✅ پرداخت شما توسط ادمین تایید شد! اشتراک شما فعال گردید. مبارکتون باشه 🚀")
+        target_user = int(data.split("_")[1])
+        # شارژ کیف پول کاربر پس از تایید ادمین
+        if target_user not in USER_WALLETS:
+            USER_WALLETS[target_user] = 0
+        USER_WALLETS[target_user] += PRICE_TOMAN
+        
+        await query.edit_message_caption(caption=query.message.caption + f"\n\n✅ **وضعیت: تایید شد و کیف پول کاربر به مبلغ {PRICE_TOMAN:,} تومان شارژ گردید!**")
+        await context.bot.send_message(
+            chat_id=target_user, 
+            text=f"💵 پرداخت و رسید شما توسط ادمین تایید شد!\nکیف پول شما به مبلغ {PRICE_TOMAN:,} تومان شارژ شد و سفارش شما انجام گردید. مبارکتون باشه 🚀"
+        )
         
     elif data.startswith("reject_"):
-        target_user = data.split("_")[1]
+        target_user = int(data.split("_")[1])
         await query.edit_message_caption(caption=query.message.caption + "\n\n❌ **وضعیت: پرداخت رد شد!**")
-        await context.bot.send_message(chat_id=int(target_user), text="❌ متاسفانه رسید پرداخت شما توسط ادمین تایید نشد. در صورت وجود مشکل به پشتیبانی پیام دهید.")
+        await context.bot.send_message(
+            chat_id=target_user, 
+            text="❌ متاسفانه رسید پرداخت شما توسط ادمین تایید نشد. در صورت وجود مشکل به پشتیبانی پیام دهید."
+        )
 
 if __name__ == '__main__':
     if TOKEN == "توکن_ربات_اینجا":
@@ -190,5 +252,5 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
     
-    print("BOT WITH FULL MENU IS RUNNING...")
+    print("BOT IS RUNNING PERFECTLY...")
     app.run_polling()
