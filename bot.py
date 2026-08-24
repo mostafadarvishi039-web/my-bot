@@ -2,9 +2,13 @@ import os
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-# توکن و آیدی ادمین از متغیرهای محیطی یا فایل کانفیگ خوانده می‌شود
-TOKEN = os.environ.get("BOT_TOKEN", "TOKEN_PLACEHOLDER")
+# خواندن توکن و آیدی ادمین از متغیرهای محیطی ریلی‌وی (Environment Variables)
+TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_ID", "7357227534"))
+
+if not TOKEN:
+    print("❌ خطا: متغیر محیطی BOT_TOKEN تنظیم نشده است!")
+    exit(1)
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -256,5 +260,5 @@ def callback_handler(call):
         bot.send_message(target_user, "❌ متاسفانه رسید پرداخت شما توسط ادمین تایید نشد. در صورت وجود مشکل به پشتیبانی پیام دهید.")
 
 if __name__ == '__main__':
-    print("BOT IS RUNNING...")
+    print("BOT IS RUNNING ON RAILWAY...")
     bot.infinity_polling()
