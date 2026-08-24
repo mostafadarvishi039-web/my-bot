@@ -1,5 +1,4 @@
 import os
-import random
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, 
@@ -14,15 +13,17 @@ TOKEN = os.environ.get("BOT_TOKEN", "توکن_ربات_اینجا")
 ADMIN_CHAT_ID = 7357227534
 
 WAITING_FOR_RECEIPT = set()
-WAITING_FOR_CONFIG_NOTE = set()  # برای گرفتن اسم/یادداشت کانفیگ از کاربر
+WAITING_FOR_CONFIG_NOTE = set()
+WAITING_FOR_SUB_LINK = set()  # برای وقتی که ادمین میخواد لینک ساب رو بعد از تایید بفرسته
 
 USER_WALLETS = {}
-USER_CONFIG_NOTES = {}  # ذخیره یادداشت کانفیگ هر کاربر
+USER_CONFIG_NOTES = {}
+PENDING_APPROVALS = {}  # ذخیره اطلاعات کاربری که رسید فرستاده
 
 CARD_NUMBER = "6219861956948888"
 CARD_HOLDER = "محمد متین اجلالی"
 PRICE_TOMAN = 248000
-PRICE_RIAL = PRICE_TOMAN * 10
+PRICE_RIAL = PRICE_TOMAN * 10  # 2,480,000 ریال
 
 def get_main_keyboard():
     keyboard = [
@@ -50,7 +51,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in USER_WALLETS:
         USER_WALLETS[user_id] = 0
         
-    # ۱. اگر کاربر منتظر ارسال رسید بود
+    # ۱. اگر ادمین بعد از زدن دکمه تایید، داره لینک ساب رو برای مشتری می‌فرسته
+    if user_id == ADMIN_CHAT_ID and user_id in WAITING_FOR_SUB_LINK:
+        target_user = WAITING_FOR_SUB_LINK[user_id]
+        sub_link = text.strip()
+        
+        # ارسال کانفیگ و متن شیک به مشتری
+        try:
+            await context.bot.send_message(
+                chat_id=target_user,
+                text=(
+                    "🎉 **پرداخت و سفارش شما با موفقیت تایید شد!**\n\n"
+                    "📦 **مشخصات اشتراک شما:**\n"
+                    "🔐 نام سرویس: سرویس نامحدود\n"
+                    "📆 مدت اعتبار: ۳۰ روز\n"
+                    "👥 حجم: ♾️ نامحدود\n\n"
+                    "🔗 **لینک سابسکریپشن اختصاصی شما:**\n"
+                    f"`{sub_link}`\n\n"
+                    "📥 این لینک را کپی کرده و در برنامه‌های اتصال (مثل V2rayNG) وارد کنید. از اتصال خود لذت ببرید! 🚀"
+                ),
+                parse_mode="Markdown"
+            )
+            await update.message.reply_text("✅ لینک ساب با موفقیت برای مشتری ارسال شد!")
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطا در ارسال لینک به کاربر: {e}")
+            
+        del WAITING_FOR_SUB_LINK[user_id]
+        return
+
+    # ۲. اگر کاربر منتظر ارسال رسید کارت به کارت بود
     if user_id in WAITING_FOR_RECEIPT and update.message.photo:
         photo_file = update.message.photo[-1].file_id
         config_note = USER_CONFIG_NOTES.get(user_id, "سرویس نامحدود")
@@ -65,7 +94,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         admin_keyboard = [
-            [InlineKeyboardButton("✅ تایید پرداخت", callback_data=f"approve_{user_id}"),
+            [InlineKeyboardButton("✅ تایید پرداخت و ارسال لینک", callback_data=f"approve_{user_id}"),
              InlineKeyboardButton("❌ رد پرداخت", callback_data=f"reject_{user_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(admin_keyboard)
@@ -80,7 +109,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(
                 "✅ **رسید شما با موفقیت ارسال شد!**\n\n"
-                "به زودی پس از تایید ادمین، کیف پول شما شارژ و سفارش شما انجام خواهد شد. 🙏",
+                "به زودی پس از تایید ادمین، لینک اشتراک برای شما ارسال خواهد شد. 🙏",
                 reply_markup=get_main_keyboard()
             )
         except Exception as e:
@@ -90,7 +119,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         WAITING_FOR_RECEIPT.remove(user_id)
         return
 
-    # ۲. اگر کاربر داشت نام/یادداشت کانفیگ رو می‌نوشت (دقیقا مطابق عکس مربوط به نام کانفیگ)
+    # ۳. اگر کاربر داشت نام/یادداشت کانفیگ رو می‌نوشت
     if user_id in WAITING_FOR_CONFIG_NOTE:
         config_note = text
         USER_CONFIG_NOTES[user_id] = config_note
@@ -99,7 +128,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_balance = USER_WALLETS[user_id]
         username = user.username or user.first_name
         
-        # نمایش پیش‌فاکتور نهایی
         invoice_text = (
             "📇 **پیش فاکتور شما:**\n"
             f"👤 نام کاربری: `{username}`\n"
@@ -127,9 +155,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(invoice_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         return
 
-    # مدیریت دکمه‌های منوی اصلی
+    # منوی اصلی
     if text == "🟢 خرید اشتراک 🔑":
-        # ابتدا دکمه انتخاب اشتراک یک ماهه نامحدود رو میدیم
         keyboard = [
             [InlineKeyboardButton("اشتراک یک ماهه نامحدود ۲۴۸ هزار تومن 🏷️", callback_data="select_unlimited_30d")]
         ]
@@ -166,7 +193,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in USER_WALLETS:
         USER_WALLETS[user_id] = 0
 
-    # وقتی روی دکمه شیشه‌ای اشتراک می‌زنه، ربات ازش یادداشت/نام کانفیگ رو می‌خواد (دقیقاً مشابه عکس شما)
     if data == "select_unlimited_30d":
         WAITING_FOR_CONFIG_NOTE.add(user_id)
         await query.message.reply_text(
@@ -182,7 +208,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             USER_WALLETS[user_id] -= PRICE_TOMAN
             await query.edit_message_text(
                 "✅ **پرداخت با موفقیت از کیف پول انجام شد!**\n\n"
-                "سرویس نامحدود ۳۰ روزه شما فعال گردید. 🚀",
+                "سرویس نامحدود ۳۰ روزه شما فعال گردید. لطفاً برای دریافت لینک ساب به پشتیبانی پیام دهید یا منتظر ارسال آن باشید. 🚀",
                 parse_mode="Markdown"
             )
         else:
@@ -201,7 +227,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "‼️مسئولیت واریز اشتباهی با شماست.\n"
             "🔝بعد از پرداخت دکمه پرداخت کردم را زده سپس تصویر رسید را ارسال نمایید"
         )
-        # سه دکمه شیشه‌ای پایین کارت به کارت دقیقاً مطابق خواسته شما
         card_keyboard = [
             [InlineKeyboardButton("📋 کپی کردن شماره کارت", callback_data="copy_card"),
              InlineKeyboardButton("💵 کپی کردن مبلغ", callback_data="copy_price")],
@@ -210,10 +235,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(card_info, reply_markup=InlineKeyboardMarkup(card_keyboard), parse_mode="HTML")
         
     elif data == "copy_card":
-        await query.answer(text=f"شماره کارت کپی شد: {CARD_NUMBER}", show_alert=True)
+        # ارسال پاسخ تایید کپی شماره کارت (در تلگرام با استفاده از متن هشدار بالای صفحه نمایش داده میشه)
+        await query.answer(text=CARD_NUMBER, show_alert=True)
         
     elif data == "copy_price":
-        await query.answer(text=f"مبلغ به ریال: {PRICE_RIAL:,} ریال", show_alert=True)
+        # ارسال مبلغ به ریال به صورت هشدار دقیق
+        await query.answer(text=str(PRICE_RIAL), show_alert=True)
         
     elif data == "send_receipt_prompt":
         WAITING_FOR_RECEIPT.add(user_id)
@@ -228,14 +255,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data.startswith("approve_"):
         target_user = int(data.split("_")[1])
-        if target_user not in USER_WALLETS:
-            USER_WALLETS[target_user] = 0
-        USER_WALLETS[target_user] += PRICE_TOMAN
+        # ذخیره یوزر آیدی مشتری برای اینکه ادمین بتونه لینک ساب رو براش بفرسته
+        WAITING_FOR_SUB_LINK[ADMIN_CHAT_ID] = target_user
         
-        await query.edit_message_caption(caption=query.message.caption + f"\n\n✅ **وضعیت: تایید شد و کیف پول به مبلغ {PRICE_TOMAN:,} تومان شارژ گردید!**")
+        await query.edit_message_caption(caption=query.message.caption + "\n\n✅ **وضعیت: رسید تایید شد.**\nلینک ساب را بفرستید تا برای کاربر ارسال شود.")
         await context.bot.send_message(
-            chat_id=target_user, 
-            text=f"💵 پرداخت شما تایید شد!\nکیف پول شما به مبلغ {PRICE_TOMAN:,} تومان شارژ شد و سفارش شما انجام گردید. مبارکتون باشه 🚀"
+            chat_id=ADMIN_CHAT_ID,
+            text=f"👇 لطفاً لینک سابسکریپشن (کانفیگ) مربوط به کاربر `{target_user}` را همینجا ارسال کنید تا ربات آن را به همراه متن کامل برایش بفرستد:",
+            parse_mode="Markdown"
         )
         
     elif data.startswith("reject_"):
@@ -243,12 +270,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_caption(caption=query.message.caption + "\n\n❌ **وضعیت: پرداخت رد شد!**")
         await context.bot.send_message(
             chat_id=target_user, 
-            text="❌ متاسفانه رسید پرداخت شما توسط ادمین تایید نشد."
+            text="❌ متاسفانه رسید پرداخت شما توسط ادمین تایید نشد. در صورت وجود مشکل به پشتیبانی پیام دهید."
         )
 
 if __name__ == '__main__':
     if TOKEN == "توکن_ربات_اینجا":
-        print("لطفاً توکن ربات را در کد وارد کنید!")
+        print("لطفاً توکن ربات را در کلید وارد کنید!")
         exit(1)
         
     app = ApplicationBuilder().token(TOKEN).build()
@@ -257,5 +284,5 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
     
-    print("BOT IS RUNNING WITH EXACT CONFIG NOTE & CARDS...")
+    print("BOT IS RUNNING PERFECTLY...")
     app.run_polling()
