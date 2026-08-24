@@ -2,12 +2,12 @@ import os
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-TOKEN = os.environ.get("BOT_TOKEN", "توکن_ربات_اینجا")
-ADMIN_CHAT_ID = 7357227534
+# توکن و آیدی ادمین از متغیرهای محیطی یا فایل کانفیگ خوانده می‌شود
+TOKEN = os.environ.get("BOT_TOKEN", "TOKEN_PLACEHOLDER")
+ADMIN_CHAT_ID = int(os.environ.get("ADMIN_ID", "7357227534"))
 
 bot = telebot.TeleBot(TOKEN)
 
-# متغیرها برای نگهداری وضعیت‌ها
 WAITING_FOR_CONFIG = {}
 WAITING_FOR_RECEIPT = {}
 ADMIN_TARGET_USER = {}
@@ -22,7 +22,7 @@ PRICE_RIAL = PRICE_TOMAN * 10
 
 def get_main_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.row(KeyboardButton("خرید اشتراک 🔑"), KeyboardButton("♻️ تمدید سرویس"))
+    keyboard.row(KeyboardButton("🟢 خرید اشتراک 🔑"), KeyboardButton("♻️ تمدید سرویس"))
     keyboard.row(KeyboardButton("🔑 اکانت تست"))
     keyboard.row(KeyboardButton("🛍️ سرویس‌های من"), KeyboardButton("🏦 کیف پول + شارژ"))
     keyboard.row(KeyboardButton("☎️ پشتیبانی"), KeyboardButton("👥 زیر مجموعه گیری"))
@@ -45,7 +45,6 @@ def handle_all_messages(message):
     if user_id not in USER_WALLETS:
         USER_WALLETS[user_id] = 0
 
-    # ۱. اگر ادمین بعد از زدن دکمه تایید، داره لینک ساب رو می‌فرسته
     if user_id == ADMIN_CHAT_ID and ADMIN_CHAT_ID in ADMIN_TARGET_USER:
         target_user = ADMIN_TARGET_USER[ADMIN_CHAT_ID]
         sub_link = message.text.strip()
@@ -72,7 +71,6 @@ def handle_all_messages(message):
         del ADMIN_TARGET_USER[ADMIN_CHAT_ID]
         return
 
-    # ۲. اگر کاربر داشت عکس رسید می‌فرستاد
     if user_id in WAITING_FOR_RECEIPT and message.photo:
         photo_file = message.photo[-1].file_id
         config_note = USER_CONFIG_NOTES.get(user_id, "سرویس نامحدود")
@@ -101,7 +99,6 @@ def handle_all_messages(message):
         del WAITING_FOR_RECEIPT[user_id]
         return
 
-    # ۳. اگر کاربر داشت نام کانفیگ/یادداشت رو می‌نوشت
     if user_id in WAITING_FOR_CONFIG and message.text:
         config_note = message.text
         USER_CONFIG_NOTES[user_id] = config_note
@@ -134,7 +131,6 @@ def handle_all_messages(message):
         bot.send_message(message.chat.id, invoice_text, reply_markup=keyboard, parse_mode="Markdown")
         return
 
-    # منوی اصلی
     text = message.text
     if text == "🟢 خرید اشتراک 🔑":
         keyboard = InlineKeyboardMarkup()
@@ -211,7 +207,6 @@ def callback_handler(call):
             "🔝بعد از پرداخت دکمه پرداخت کردم را زده سپس تصویر رسید را ارسال نمایید"
         )
         card_keyboard = InlineKeyboardMarkup()
-        # استفاده از دکمه‌های کپی مستقیم یا ارسال متن در هشدار
         card_keyboard.row(
             InlineKeyboardButton("📋 کپی کردن شماره کارت", callback_data="copy_card"),
             InlineKeyboardButton("💵 کپی کردن مبلغ", callback_data="copy_price")
@@ -261,5 +256,5 @@ def callback_handler(call):
         bot.send_message(target_user, "❌ متاسفانه رسید پرداخت شما توسط ادمین تایید نشد. در صورت وجود مشکل به پشتیبانی پیام دهید.")
 
 if __name__ == '__main__':
-    print("TELEBOT IS RUNNING...")
+    print("BOT IS RUNNING...")
     bot.infinity_polling()
