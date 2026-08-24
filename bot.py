@@ -22,7 +22,7 @@ PRICE_RIAL = PRICE_TOMAN * 10
 
 def get_main_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.row(KeyboardButton("🟢 خرید اشتراک 🔑"), KeyboardButton("♻️ تمدید سرویس"))
+    keyboard.row(KeyboardButton("خرید اشتراک 🔑"), KeyboardButton("♻️ تمدید سرویس"))
     keyboard.row(KeyboardButton("🔑 اکانت تست"))
     keyboard.row(KeyboardButton("🛍️ سرویس‌های من"), KeyboardButton("🏦 کیف پول + شارژ"))
     keyboard.row(KeyboardButton("☎️ پشتیبانی"), KeyboardButton("👥 زیر مجموعه گیری"))
